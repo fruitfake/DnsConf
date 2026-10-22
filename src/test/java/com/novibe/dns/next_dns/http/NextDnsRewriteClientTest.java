@@ -48,7 +48,8 @@ class NextDnsRewriteClientTest {
     @Test
     void retriesConnectionResetWhileSavingRewrite() throws IOException, InterruptedException {
         doReturn(Duration.ZERO).when(nextDnsRewriteClient).retryDelay();
-        doThrow(new IOException("Connection reset")).doReturn(response(200, "{}"))
+        HttpResponse<String> success = response(200, "{}");
+        doThrow(new IOException("Connection reset")).doReturn(success)
                 .when(httpClient).send(any(), any());
 
         nextDnsRewriteClient.saveRewrites(List.of(new CreateRewriteDto("chatgpt.com", "83.217.211.149")));
