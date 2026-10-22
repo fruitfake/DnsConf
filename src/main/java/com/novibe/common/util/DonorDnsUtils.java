@@ -52,13 +52,23 @@ public class DonorDnsUtils {
                     throw new IllegalStateException("Donor lookup failed; rewrites were not saved", e.getCause());
                 }
             }
+            if (!bypassRoutes.isEmpty() && resolved.isEmpty()) {
+                throw new IllegalStateException("Donor resolved no domains; rewrites were not saved");
+            }
+            int skipped = bypassRoutes.size() - resolved.size();
+            if (skipped > 0) {
+                Log.fail("Skipped %s donor lookups; existing rules for these domains are preserved".formatted(skipped));
+                if ("true".equals(System.getenv("GITHUB_ACTIONS"))) {
+                    System.out.println("::warning::Skipped " + skipped + " unresolved donor domains; existing rules preserved. See lookup errors above.");
+                }
+            }
             bypassRoutes.clear();
             bypassRoutes.addAll(resolved);
         }
     }
 
     private static BypassRoute replaceIp(BypassRoute bypassRoute, Resolver dnsResolver) {
-        SequencedSet<String> donorIps = fetchDonorIps(bypassRoute.website(), dnsResolver);
+        SequencedSet<String> donorIps = fetchUsableDonorIps(bypassRoute.website(), dnsResolver);
         if (donorIps.isEmpty()) {
             Log.fail("Donor has no A record for %s; leaving existing rewrite untouched".formatted(bypassRoute.website()));
             return null;
@@ -69,6 +79,15 @@ public class DonorDnsUtils {
             bypassRoute.ip(newIp);
         }
         return bypassRoute;
+    }
+
+    static SequencedSet<String> fetchUsableDonorIps(String domain, Resolver resolver) {
+        try {
+            return fetchDonorIps(domain, resolver);
+        } catch (IllegalStateException e) {
+            Log.fail(e.getMessage() + "; preserving existing rewrite instead of using the source IP");
+            return new LinkedHashSet<>();
+        }
     }
 
     // Donor may return several IPs in random order, so keep current IP if it is still among them

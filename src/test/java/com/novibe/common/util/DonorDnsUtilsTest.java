@@ -29,6 +29,18 @@ class DonorDnsUtilsTest {
     }
 
     @Test
+    void exhaustedDonorFailuresNeverProduceTheSourceIp() {
+        try (var lookups = mockConstruction(Lookup.class, (lookup, context) -> {
+            when(lookup.run()).thenReturn(null);
+            when(lookup.getResult()).thenReturn(Lookup.TRY_AGAIN);
+            when(lookup.getErrorString()).thenReturn("SERVFAIL");
+        })) {
+            assertEquals(donorIps(), DonorDnsUtils.fetchUsableDonorIps("broken.example", mock(Resolver.class)));
+            assertEquals(3, lookups.constructed().size());
+        }
+    }
+
+    @Test
     void skipsDomainsThatDonorDoesNotHave() {
         try (var lookups = mockConstruction(Lookup.class, (lookup, context) -> {
             when(lookup.run()).thenReturn(null);
