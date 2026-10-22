@@ -71,6 +71,21 @@ public class NextDnsRewriteService {
     public void saveRewrites(List<CreateRewriteDto> createRewriteDtos) {
         Log.io("Saving %s new rewrites to NextDNS...".formatted(createRewriteDtos.size()));
         nextDnsRewriteClient.saveRewrites(createRewriteDtos);
+        if (!createRewriteDtos.isEmpty()) {
+            verifySaved(createRewriteDtos, getExistingRewrites());
+            Log.common("Verified %s saved rewrites via NextDNS API".formatted(createRewriteDtos.size()));
+        }
+    }
+
+    static void verifySaved(List<CreateRewriteDto> expected, List<RewriteDto> actual) {
+        for (CreateRewriteDto request : expected) {
+            List<RewriteDto> matches = actual.stream()
+                    .filter(record -> record.name().equals(request.name())).toList();
+            if (matches.isEmpty() || matches.stream().anyMatch(record -> !record.content().equals(request.content()))) {
+                throw new IllegalStateException("NextDNS rewrite verification failed for " + request.name()
+                        + "; expected " + request.content() + ", got " + matches);
+            }
+        }
     }
 
     public void removeAll() {
