@@ -1,6 +1,7 @@
 package com.novibe.dns.next_dns.http;
 
 import com.novibe.dns.next_dns.http.dto.request.CreateRewriteDto;
+import com.novibe.common.exception.DnsHttpError;
 import com.novibe.dns.next_dns.http.dto.response.rewrite.MultiRewriteResponse;
 import com.novibe.dns.next_dns.http.dto.response.rewrite.RewriteDto;
 import com.novibe.dns.next_dns.http.dto.response.rewrite.SingleRewriteResponse;
@@ -32,7 +33,15 @@ public class NextDnsRewriteClient extends AbstractNextDnsApiClient {
     }
 
     private @Nullable SingleRewriteResponse deleteRewriteById(String id) {
-        return delete(path() + "/" + id, SingleRewriteResponse.class);
+        try {
+            return delete(path() + "/" + id, SingleRewriteResponse.class);
+        } catch (DnsHttpError e) {
+            // A lost response may cause a retry after the first DELETE already succeeded.
+            if (e.getCode() == 404 && fetchRewrites().stream().noneMatch(record -> record.id().equals(id))) {
+                return null;
+            }
+            throw e;
+        }
     }
 
     @Override

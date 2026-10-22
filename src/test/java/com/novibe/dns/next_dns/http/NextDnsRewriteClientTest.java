@@ -36,6 +36,16 @@ import static org.mockito.Mockito.verify;
 class NextDnsRewriteClientTest {
 
     @Test
+    void acceptsAlreadyDeletedRuleOnlyAfterCheckingProfile() throws IOException, InterruptedException {
+        doReturn(response(404, "{}"), response(200, "{\"data\":[]}"))
+                .when(httpClient).send(any(), any());
+
+        nextDnsRewriteClient.deleteRewritesByIds(List.of("already-deleted"));
+
+        verify(httpClient, times(2)).send(any(), any());
+    }
+
+    @Test
     void retriesConnectionResetWhileSavingRewrite() throws IOException, InterruptedException {
         doReturn(Duration.ZERO).when(nextDnsRewriteClient).retryDelay();
         doThrow(new IOException("Connection reset")).doReturn(response(200, "{}"))
