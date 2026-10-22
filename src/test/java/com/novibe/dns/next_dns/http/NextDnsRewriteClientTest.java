@@ -23,6 +23,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -32,6 +34,39 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class NextDnsRewriteClientTest {
+
+    @Test
+    void retriesConnectionResetWhileSavingRewrite() throws IOException, InterruptedException {
+        doReturn(Duration.ZERO).when(nextDnsRewriteClient).retryDelay();
+        doThrow(new IOException("Connection reset")).doReturn(response(200, "{}"))
+                .when(httpClient).send(any(), any());
+
+        nextDnsRewriteClient.saveRewrites(List.of(new CreateRewriteDto("chatgpt.com", "83.217.211.149")));
+
+        verify(httpClient, times(2)).send(any(), any());
+    }
+
+    @Test
+    void failsAfterThreeNetworkAttempts() throws IOException, InterruptedException {
+        doReturn(Duration.ZERO).when(nextDnsRewriteClient).retryDelay();
+        doThrow(new IOException("Connection reset")).when(httpClient).send(any(), any());
+
+        assertThrows(RuntimeException.class, () -> nextDnsRewriteClient.fetchRewrites());
+
+        verify(httpClient, times(3)).send(any(), any());
+    }
+
+    @Test
+    void interruptionDoesNotRetryAndKeepsInterruptFlag() throws IOException, InterruptedException {
+        doThrow(new InterruptedException("cancelled")).when(httpClient).send(any(), any());
+        try {
+            assertThrows(RuntimeException.class, () -> nextDnsRewriteClient.fetchRewrites());
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(httpClient, times(1)).send(any(), any());
+        } finally {
+            Thread.interrupted();
+        }
+    }
 
     @Mock
     private HttpClient httpClient;
