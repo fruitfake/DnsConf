@@ -58,7 +58,15 @@ public abstract class HttpRequestSender {
                 reactOnError(httpError);
             }
             return response;
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
+            if (attempt < retryAttempts()) {
+                Log.fail("Network request failed: " + e.getMessage());
+                waitForRetry(0, attempt);
+                return sendRequest(method, path, body, attempt + 1);
+            }
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
     }
@@ -70,6 +78,7 @@ public abstract class HttpRequestSender {
                 : HttpRequest.BodyPublishers.ofString(body.toJson());
 
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(requestUrl(path)))
+                .timeout(Duration.ofSeconds(30))
                 .method(method, requestBody);
         headers().forEach(request::header);
 
@@ -90,8 +99,9 @@ public abstract class HttpRequestSender {
     }
 
     private void waitForRetry(int responseCode, int attempt) {
-        Log.common("\nCode %s received. Attempt %s of %s, waiting %s seconds before retry"
-                .formatted(responseCode, attempt, retryAttempts(), retryDelay().toSeconds()));
+        String reason = responseCode == 0 ? "Network error" : "Code " + responseCode + " received";
+        Log.common("\n%s. Attempt %s of %s, waiting %s seconds before retry"
+                .formatted(reason, attempt, retryAttempts(), retryDelay().toSeconds()));
         for (long secondsLeft = retryDelay().toSeconds(); secondsLeft > 0; secondsLeft--) {
             try {
                 Thread.sleep(Duration.ofSeconds(1));
