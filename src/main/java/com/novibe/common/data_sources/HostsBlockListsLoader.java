@@ -23,7 +23,8 @@ public class HostsBlockListsLoader extends ListLoader<String> {
 
     @Override
     protected String toObject(HostsLine line) {
-        return line.domain();
+        String domain = line.domain();
+        return domain.startsWith("*.") ? domain.substring(2) : domain;
     }
 
     static boolean isBlockIp(String ip) {
